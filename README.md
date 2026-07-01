@@ -1,4 +1,4 @@
-# The Verandah — Hotel Management System
+# Mombasa Raha Dishes. — Hotel Management System
 
 A hotel guest-dining system: customers register and log in (validated against
 MySQL on every attempt), browse a digital menu, view full details of a
