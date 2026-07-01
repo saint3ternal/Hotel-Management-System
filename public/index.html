@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mombasa Raha Dishes. &mdash; Guest Dining</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;0,9..144,600;1,9..144,500&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<!-- ============================================================ -->
+<!-- TOP BAR -->
+<!-- ============================================================ -->
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <span class="brand-mark">M</span>
+      <span class="brand-name">Mombasa Raha Dishes.</span>
+    </div>
+    <nav class="topbar-nav" id="topbarNav" hidden>
+      <span class="guest-greeting" id="guestGreeting"></span>
+      <button class="btn-ghost" id="navHistoryBtn">Order history</button>
+      <button class="btn-ghost" id="navLogoutBtn">Sign out</button>
+    </nav>
+  </div>
+</header>
+
+<main id="app">
+
+  <!-- ============================================================ -->
+  <!-- AUTH SCREEN (Login / Register) -->
+  <!-- ============================================================ -->
+  <section id="authScreen" class="screen auth-screen">
+    <div class="ledger-card">
+
+      <div class="ledger-side">
+        <p class="ledger-eyebrow">Guest Register</p>
+        <h1 class="ledger-title">Welcome to<br>The&nbsp;Mombasa Raha Dishes.</h1>
+        <p class="ledger-copy">
+          Sign in with your guest account to browse tonight's menu
+          and place your order &mdash; sent straight to our kitchen ledger.
+        </p>
+        <div class="ledger-stamp">No. 0427&ensp;&middot;&ensp;Est. dining record</div>
+      </div>
+
+      <div class="ledger-forms">
+
+        <div class="form-tabs">
+          <button class="form-tab active" data-tab="login">Sign in</button>
+          <button class="form-tab" data-tab="register">New guest</button>
+        </div>
+
+        <!-- LOGIN FORM -->
+        <form id="loginForm" class="form-panel active" novalidate>
+          <div class="field">
+            <label for="loginEmail">Email</label>
+            <input type="email" id="loginEmail" name="email" autocomplete="email" required>
+          </div>
+          <div class="field">
+            <label for="loginPassword">Password</label>
+            <input type="password" id="loginPassword" name="password" autocomplete="current-password" required>
+          </div>
+          <div class="form-message" id="loginMessage" role="alert"></div>
+          <button type="submit" class="btn-primary" id="loginSubmit">Sign in</button>
+        </form>
+
+        <!-- REGISTER FORM -->
+        <form id="registerForm" class="form-panel" novalidate>
+          <div class="field">
+            <label for="regName">Full name</label>
+            <input type="text" id="regName" name="fullName" autocomplete="name" required>
+          </div>
+          <div class="field">
+            <label for="regEmail">Email</label>
+            <input type="email" id="regEmail" name="email" autocomplete="email" required>
+          </div>
+          <div class="field">
+            <label for="regPhone">Phone number</label>
+            <input type="tel" id="regPhone" name="phone" autocomplete="tel" placeholder="+254 123 456 789" required>
+          </div>
+          <div class="field">
+            <label for="regPassword">Password</label>
+            <input type="password" id="regPassword" name="password" autocomplete="new-password" required>
+            <p class="field-hint">At least 8 characters, with an uppercase letter, a lowercase letter, and a number.</p>
+          </div>
+          <div class="form-message" id="registerMessage" role="alert"></div>
+          <button type="submit" class="btn-primary" id="registerSubmit">Create account</button>
+        </form>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- MENU SCREEN -->
+  <!-- ============================================================ -->
+  <section id="menuScreen" class="screen menu-screen" hidden>
+    <div class="menu-layout">
+
+      <div class="menu-main">
+        <div class="menu-heading">
+          <p class="menu-eyebrow">Tonight's Selection</p>
+          <h1 class="menu-title">Digital Menu</h1>
+        </div>
+
+        <div class="category-tabs" id="categoryTabs"></div>
+        <div class="menu-grid" id="menuGrid">
+          <p class="menu-loading">Setting the table&hellip;</p>
+        </div>
+      </div>
+
+      <!-- ORDER TICKET (signature element: looks like a printed receipt) -->
+      <aside class="ticket" id="ticketPanel">
+        <div class="ticket-paper">
+          <div class="ticket-head">
+            <p class="ticket-label">Order Ticket</p>
+            <p class="ticket-sub">Table service &middot; Guest copy</p>
+          </div>
+          <div class="ticket-lines" id="ticketLines">
+            <p class="ticket-empty">No items yet. Tap a dish to add it.</p>
+          </div>
+          <div class="ticket-total-row">
+            <span>Total</span>
+            <span id="ticketTotal">$0.00</span>
+          </div>
+          <textarea class="ticket-notes" id="orderNotes" placeholder="Notes for the kitchen (optional)&hellip;" rows="2"></textarea>
+          <div class="form-message" id="orderMessage" role="alert"></div>
+          <button class="btn-primary" id="placeOrderBtn" disabled>Send to kitchen</button>
+        </div>
+      </aside>
+
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- ORDER HISTORY SCREEN -->
+  <!-- ============================================================ -->
+  <section id="historyScreen" class="screen history-screen" hidden>
+    <div class="history-heading">
+      <p class="menu-eyebrow">Your Records</p>
+      <h1 class="menu-title">Order History</h1>
+      <button class="btn-ghost" id="backToMenuBtn">&larr; Back to menu</button>
+    </div>
+    <div id="historyList" class="history-list"></div>
+  </section>
+
+</main>
+
+<!-- ============================================================ -->
+<!-- MEAL DETAIL MODAL -->
+<!-- ============================================================ -->
+<div id="mealModal" class="modal-overlay" hidden>
+  <div class="modal-card">
+    <button class="modal-close" id="modalClose" aria-label="Close">&times;</button>
+    <div class="modal-image-wrap">
+      <img id="modalImage" src="" alt="">
+      <span class="modal-tag" id="modalVegTag" hidden>Vegetarian</span>
+    </div>
+    <div class="modal-body">
+      <p class="modal-category" id="modalCategory"></p>
+      <h2 id="modalName"></h2>
+      <p class="modal-description" id="modalDescription"></p>
+      <div class="modal-meta">
+        <span id="modalSpice"></span>
+      </div>
+      <div class="modal-footer">
+        <span class="modal-price" id="modalPrice"></span>
+        <div class="qty-stepper">
+          <button id="qtyMinus" aria-label="Decrease quantity">&minus;</button>
+          <span id="qtyValue">1</span>
+          <button id="qtyPlus" aria-label="Increase quantity">+</button>
+        </div>
+        <button class="btn-primary" id="modalAddBtn">Add to order</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/menu.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
