@@ -1,5 +1,5 @@
 /* ============================================================
-   THE VERANDAH — design tokens
+   Mombasa Raha Dishes — design tokens
    Palette: ink navy, warm ivory, burnished gold, charcoal, sage
    Type: Fraunces (display) / Inter (body+UI) / JetBrains Mono (numbers)
    ============================================================ */
@@ -355,7 +355,7 @@ button { font-family: inherit; cursor: pointer; }
   margin: 0 0 12px;
   flex: 1;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  /*-webkit-line-clamp: 2;*/
   -webkit-box-orient: vertical;
   overflow: hidden;
 }

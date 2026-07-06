@@ -6,7 +6,7 @@
 // ============================================================
 
 const express = require('express');
-const { pool } = require('./db');
+const { sql } = require('./db');
 const { requireAuth } = require('./authMiddleware');
 
 const router = express.Router();
@@ -20,17 +20,15 @@ router.use(requireAuth);
 // ------------------------------------------------------------
 router.get('/', async (req, res) => {
   try {
-    const [categories] = await pool.query(
-      'SELECT category_id, name FROM menu_categories ORDER BY display_order'
-    );
+    const categories = await sql`SELECT category_id, name FROM menu_categories ORDER BY display_order`;
 
-    const [items] = await pool.query(
-      `SELECT item_id, category_id, name, description, price, image_url,
-              is_available, is_vegetarian, spice_level
-       FROM menu_items
-       WHERE is_available = TRUE
-       ORDER BY name`
-    );
+    const items = await sql`
+      SELECT item_id, category_id, name, description, price, image_url,
+             is_available, is_vegetarian, spice_level
+      FROM menu_items
+      WHERE is_available = TRUE
+      ORDER BY name
+    `;
 
     const menu = categories.map(cat => ({
       categoryId: cat.category_id,
@@ -58,15 +56,14 @@ router.get('/item/:id', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid item id.' });
     }
 
-    const [rows] = await pool.query(
-      `SELECT mi.item_id, mi.category_id, mc.name AS category_name, mi.name,
-              mi.description, mi.price, mi.image_url, mi.is_available,
-              mi.is_vegetarian, mi.spice_level
-       FROM menu_items mi
-       JOIN menu_categories mc ON mc.category_id = mi.category_id
-       WHERE mi.item_id = ?`,
-      [itemId]
-    );
+    const rows = await sql`
+      SELECT mi.item_id, mi.category_id, mc.name AS category_name, mi.name,
+             mi.description, mi.price, mi.image_url, mi.is_available,
+             mi.is_vegetarian, mi.spice_level
+      FROM menu_items mi
+      JOIN menu_categories mc ON mc.category_id = mi.category_id
+      WHERE mi.item_id = ${itemId}
+    `;
 
     if (rows.length === 0) {
       return res.status(404).json({ success: false, message: 'Menu item not found.' });

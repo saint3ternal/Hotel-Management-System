@@ -8,7 +8,7 @@
 
 const express = require('express');
 const bcrypt = require('bcryptjs');
-const { pool } = require('./db');
+const { sql } = require('./db');
 const { validateRegistration, validateLogin, sanitizeString } = require('./validators');
 
 const router = express.Router();
@@ -34,10 +34,7 @@ router.post('/register', async (req, res) => {
     const cleanPhone = sanitizeString(phone);
 
     // Check for an existing account with this email
-    const [existing] = await pool.query(
-      'SELECT customer_id FROM customers WHERE email = ?',
-      [cleanEmail]
-    );
+    const existing = await sql`SELECT customer_id FROM customers WHERE email = ${cleanEmail}`;
 
     if (existing.length > 0) {
       return res.status(409).json({
@@ -48,16 +45,16 @@ router.post('/register', async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
-    const [result] = await pool.query(
-      `INSERT INTO customers (full_name, email, phone, password_hash)
-       VALUES (?, ?, ?, ?)`,
-      [cleanName, cleanEmail, cleanPhone, passwordHash]
-    );
+    const result = await sql`
+      INSERT INTO customers (full_name, email, phone, password_hash)
+      VALUES (${cleanName}, ${cleanEmail}, ${cleanPhone}, ${passwordHash})
+      RETURNING customer_id
+    `;
 
     res.status(201).json({
       success: true,
       message: 'Registration successful. You can now log in.',
-      customerId: result.insertId
+      customerId: result[0].customer_id
     });
   } catch (err) {
     console.error('Register error:', err);
@@ -82,17 +79,13 @@ router.post('/login', async (req, res) => {
   const cleanEmail = email.trim().toLowerCase();
 
   try {
-    const [rows] = await pool.query(
-      'SELECT * FROM customers WHERE email = ?',
-      [cleanEmail]
-    );
+    const rows = await sql`SELECT * FROM customers WHERE email = ${cleanEmail}`;
 
     const logAttempt = async (success, customerId = null) => {
-      await pool.query(
-        `INSERT INTO login_attempts (email, customer_id, success, ip_address)
-         VALUES (?, ?, ?, ?)`,
-        [cleanEmail, customerId, success, ip]
-      );
+      await sql`
+        INSERT INTO login_attempts (email, customer_id, success, ip_address)
+        VALUES (${cleanEmail}, ${customerId}, ${success}, ${ip})
+      `;
     };
 
     if (rows.length === 0) {
@@ -122,10 +115,11 @@ router.post('/login', async (req, res) => {
         lockedUntil = new Date(Date.now() + LOCK_DURATION_MINUTES * 60000);
       }
 
-      await pool.query(
-        'UPDATE customers SET failed_attempts = ?, locked_until = ? WHERE customer_id = ?',
-        [lockedUntil ? 0 : newFailedCount, lockedUntil, customer.customer_id]
-      );
+      await sql`
+        UPDATE customers
+        SET failed_attempts = ${lockedUntil ? 0 : newFailedCount}, locked_until = ${lockedUntil}
+        WHERE customer_id = ${customer.customer_id}
+      `;
 
       await logAttempt(false, customer.customer_id);
 
@@ -144,10 +138,11 @@ router.post('/login', async (req, res) => {
     }
 
     // Successful login: reset failed attempts, log success, start session
-    await pool.query(
-      'UPDATE customers SET failed_attempts = 0, locked_until = NULL WHERE customer_id = ?',
-      [customer.customer_id]
-    );
+    await sql`
+      UPDATE customers
+      SET failed_attempts = 0, locked_until = NULL
+      WHERE customer_id = ${customer.customer_id}
+    `;
     await logAttempt(true, customer.customer_id);
 
     req.session.customerId = customer.customer_id;

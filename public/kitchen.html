@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kitchen Dashboard &mdash; Mombasa Raha Dishes.</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/Kitchen.css">
+</head>
+<body>
+ 
+<!-- ============================================================ -->
+<!-- PIN LOGIN OVERLAY -->
+<!-- ============================================================ -->
+<div id="pinScreen" class="pin-screen">
+  <div class="pin-card">
+    <div class="pin-brand">
+      <span class="pin-brand-mark">M</span>
+      <span>Mombasa Raha Dishes.</span>
+    </div>
+    <h1 class="pin-title">Kitchen&nbsp;Access</h1>
+    <p class="pin-sub">Enter your staff PIN to open the order dashboard.</p>
+ 
+    <div class="pin-dots" id="pinDots">
+      <span></span><span></span><span></span><span></span>
+    </div>
+ 
+    <div class="pin-pad">
+      <button class="pin-key" data-digit="1">1</button>
+      <button class="pin-key" data-digit="2">2</button>
+      <button class="pin-key" data-digit="3">3</button>
+      <button class="pin-key" data-digit="4">4</button>
+      <button class="pin-key" data-digit="5">5</button>
+      <button class="pin-key" data-digit="6">6</button>
+      <button class="pin-key" data-digit="7">7</button>
+      <button class="pin-key" data-digit="8">8</button>
+      <button class="pin-key" data-digit="9">9</button>
+      <button class="pin-key pin-key--clear" id="pinClear">✕</button>
+      <button class="pin-key" data-digit="0">0</button>
+      <button class="pin-key pin-key--enter" id="pinEnter">↵</button>
+    </div>
+ 
+    <p class="pin-error" id="pinError"></p>
+  </div>
+</div>
+ 
+<!-- ============================================================ -->
+<!-- KITCHEN DASHBOARD -->
+<!-- ============================================================ -->
+<div id="dashboard" class="dashboard" hidden>
+ 
+  <!-- HEADER BAR -->
+  <header class="dash-header">
+    <div class="dash-header-left">
+      <span class="dash-brand-mark">M</span>
+      <div>
+        <h1 class="dash-title">Kitchen Dashboard</h1>
+        <p class="dash-subtitle">Mombasa Raha Dishes. &mdash; Orders Manager</p>
+      </div>
+    </div>
+ 
+    <div class="dash-stats" id="dashStats">
+      <div class="stat-pill stat-pill--pending">
+        <span class="stat-num" id="statPending">0</span>
+        <span class="stat-lbl">Pending</span>
+      </div>
+      <div class="stat-pill stat-pill--confirmed">
+        <span class="stat-num" id="statConfirmed">0</span>
+        <span class="stat-lbl">Confirmed</span>
+      </div>
+      <div class="stat-pill stat-pill--preparing">
+        <span class="stat-num" id="statPreparing">0</span>
+        <span class="stat-lbl">Preparing</span>
+      </div>
+      <div class="stat-pill stat-pill--served">
+        <span class="stat-num" id="statServed">0</span>
+        <span class="stat-lbl">Served</span>
+      </div>
+    </div>
+ 
+    <div class="dash-header-right">
+      <div class="poll-indicator" id="pollIndicator" title="Live polling active">
+        <span class="poll-dot"></span>
+        <span class="poll-label">Live</span>
+      </div>
+      <span class="last-updated" id="lastUpdated"></span>
+      <button class="btn-logout" id="logoutBtn">Sign out</button>
+    </div>
+  </header>
+ 
+  <!-- KANBAN BOARD -->
+  <main class="kanban">
+ 
+    <div class="kanban-col" id="col-pending">
+      <div class="col-header">
+        <span class="col-dot col-dot--pending"></span>
+        <h2 class="col-title">Pending</h2>
+        <span class="col-count" id="count-pending">0</span>
+      </div>
+      <div class="col-body" id="cards-pending"></div>
+    </div>
+ 
+    <div class="kanban-col" id="col-confirmed">
+      <div class="col-header">
+        <span class="col-dot col-dot--confirmed"></span>
+        <h2 class="col-title">Confirmed</h2>
+        <span class="col-count" id="count-confirmed">0</span>
+      </div>
+      <div class="col-body" id="cards-confirmed"></div>
+    </div>
+ 
+    <div class="kanban-col" id="col-preparing">
+      <div class="col-header">
+        <span class="col-dot col-dot--preparing"></span>
+        <h2 class="col-title">Preparing</h2>
+        <span class="col-count" id="count-preparing">0</span>
+      </div>
+      <div class="col-body" id="cards-preparing"></div>
+    </div>
+ 
+    <div class="kanban-col" id="col-served">
+      <div class="col-header">
+        <span class="col-dot col-dot--served"></span>
+        <h2 class="col-title">Served</h2>
+        <span class="col-count" id="count-served">0</span>
+      </div>
+      <div class="col-body" id="cards-served"></div>
+    </div>
+ 
+  </main>
+ 
+  <!-- EMPTY STATE (shown when all columns are empty) -->
+  <div class="empty-state" id="emptyState" hidden>
+    <div class="empty-icon">🍽</div>
+    <p class="empty-title">No active orders</p>
+    <p class="empty-sub">New orders from guests will appear here automatically.</p>
+  </div>
+ 
+</div>
+ 
+<!-- ORDER CARD TEMPLATE (cloned by JS) -->
+<template id="orderCardTemplate">
+  <div class="order-card">
+    <div class="order-card-header">
+      <span class="order-id"></span>
+      <span class="burn-timer"></span>
+    </div>
+    <p class="order-customer"></p>
+    <div class="order-items-list"></div>
+    <p class="order-notes" hidden></p>
+    <div class="order-footer">
+      <span class="order-total"></span>
+      <div class="order-actions"></div>
+    </div>
+  </div>
+</template>
+ 
+<div id="toast" class="k-toast" hidden></div>
+ 
+<script src="js/kitchen.js"></script>
+</body>
+</html>
