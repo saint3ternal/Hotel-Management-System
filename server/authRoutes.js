@@ -1,19 +1,15 @@
 // ============================================================
-// Auth routes: register, login, logout, session check
-// ============================================================
-// Every login attempt (successful or not) is recorded in the
-// login_attempts table, as required. Accounts lock temporarily
-// after repeated failures to slow down brute-force attempts.
+// Auth routes — PostgreSQL edition
 // ============================================================
 
 const express = require('express');
 const bcrypt = require('bcryptjs');
-const { sql } = require('./db');
+const { pool } = require('./db');
 const { validateRegistration, validateLogin, sanitizeString } = require('./validators');
 
 const router = express.Router();
 
-const MAX_FAILED_ATTEMPTS = 5;
+const MAX_FAILED_ATTEMPTS   = 5;
 const LOCK_DURATION_MINUTES = 15;
 const SALT_ROUNDS = 12;
 
@@ -30,13 +26,15 @@ router.post('/register', async (req, res) => {
     }
 
     const cleanEmail = email.trim().toLowerCase();
-    const cleanName = sanitizeString(fullName);
+    const cleanName  = sanitizeString(fullName);
     const cleanPhone = sanitizeString(phone);
 
-    // Check for an existing account with this email
-    const existing = await sql`SELECT customer_id FROM customers WHERE email = ${cleanEmail}`;
+    const existing = await pool.query(
+      'SELECT customer_id FROM customers WHERE email = $1',
+      [cleanEmail]
+    );
 
-    if (existing.length > 0) {
+    if (existing.rows.length > 0) {
       return res.status(409).json({
         success: false,
         message: 'An account with this email already exists. Please log in instead.'
@@ -45,16 +43,17 @@ router.post('/register', async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
-    const result = await sql`
-      INSERT INTO customers (full_name, email, phone, password_hash)
-      VALUES (${cleanName}, ${cleanEmail}, ${cleanPhone}, ${passwordHash})
-      RETURNING customer_id
-    `;
+    const result = await pool.query(
+      `INSERT INTO customers (full_name, email, phone, password_hash)
+       VALUES ($1, $2, $3, $4)
+       RETURNING customer_id`,
+      [cleanName, cleanEmail, cleanPhone, passwordHash]
+    );
 
     res.status(201).json({
       success: true,
       message: 'Registration successful. You can now log in.',
-      customerId: result[0].customer_id
+      customerId: result.rows[0].customer_id
     });
   } catch (err) {
     console.error('Register error:', err);
@@ -64,8 +63,6 @@ router.post('/register', async (req, res) => {
 
 // ------------------------------------------------------------
 // POST /api/auth/login
-// Validates credentials on every attempt and logs every
-// attempt (success or failure) to login_attempts.
 // ------------------------------------------------------------
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
@@ -79,14 +76,17 @@ router.post('/login', async (req, res) => {
   const cleanEmail = email.trim().toLowerCase();
 
   try {
-    const rows = await sql`SELECT * FROM customers WHERE email = ${cleanEmail}`;
+    const { rows } = await pool.query(
+      'SELECT * FROM customers WHERE email = $1',
+      [cleanEmail]
+    );
 
-    const logAttempt = async (success, customerId = null) => {
-      await sql`
-        INSERT INTO login_attempts (email, customer_id, success, ip_address)
-        VALUES (${cleanEmail}, ${customerId}, ${success}, ${ip})
-      `;
-    };
+    const logAttempt = (success, customerId = null) =>
+      pool.query(
+        `INSERT INTO login_attempts (email, customer_id, success, ip_address)
+         VALUES ($1, $2, $3, $4)`,
+        [cleanEmail, customerId, success, ip]
+      );
 
     if (rows.length === 0) {
       await logAttempt(false);
@@ -95,13 +95,13 @@ router.post('/login', async (req, res) => {
 
     const customer = rows[0];
 
-    // Check account lock status
+    // Check lock
     if (customer.locked_until && new Date(customer.locked_until) > new Date()) {
       const minutesLeft = Math.ceil((new Date(customer.locked_until) - new Date()) / 60000);
       await logAttempt(false, customer.customer_id);
       return res.status(423).json({
         success: false,
-        message: `Account temporarily locked due to repeated failed attempts. Try again in ${minutesLeft} minute(s).`
+        message: `Account locked. Try again in ${minutesLeft} minute(s).`
       });
     }
 
@@ -115,11 +115,10 @@ router.post('/login', async (req, res) => {
         lockedUntil = new Date(Date.now() + LOCK_DURATION_MINUTES * 60000);
       }
 
-      await sql`
-        UPDATE customers
-        SET failed_attempts = ${lockedUntil ? 0 : newFailedCount}, locked_until = ${lockedUntil}
-        WHERE customer_id = ${customer.customer_id}
-      `;
+      await pool.query(
+        'UPDATE customers SET failed_attempts = $1, locked_until = $2 WHERE customer_id = $3',
+        [lockedUntil ? 0 : newFailedCount, lockedUntil, customer.customer_id]
+      );
 
       await logAttempt(false, customer.customer_id);
 
@@ -137,24 +136,23 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    // Successful login: reset failed attempts, log success, start session
-    await sql`
-      UPDATE customers
-      SET failed_attempts = 0, locked_until = NULL
-      WHERE customer_id = ${customer.customer_id}
-    `;
+    // Success
+    await pool.query(
+      'UPDATE customers SET failed_attempts = 0, locked_until = NULL WHERE customer_id = $1',
+      [customer.customer_id]
+    );
     await logAttempt(true, customer.customer_id);
 
-    req.session.customerId = customer.customer_id;
+    req.session.customerId   = customer.customer_id;
     req.session.customerName = customer.full_name;
 
     res.json({
       success: true,
       message: 'Login successful.',
       customer: {
-        id: customer.customer_id,
+        id:       customer.customer_id,
         fullName: customer.full_name,
-        email: customer.email
+        email:    customer.email
       }
     });
   } catch (err) {
@@ -167,10 +165,8 @@ router.post('/login', async (req, res) => {
 // POST /api/auth/logout
 // ------------------------------------------------------------
 router.post('/logout', (req, res) => {
-  req.session.destroy((err) => {
-    if (err) {
-      return res.status(500).json({ success: false, message: 'Could not log out.' });
-    }
+  req.session.destroy(err => {
+    if (err) return res.status(500).json({ success: false, message: 'Could not log out.' });
     res.clearCookie('connect.sid');
     res.json({ success: true, message: 'Logged out successfully.' });
   });
@@ -178,7 +174,6 @@ router.post('/logout', (req, res) => {
 
 // ------------------------------------------------------------
 // GET /api/auth/session
-// Lets the frontend check if the user is currently logged in
 // ------------------------------------------------------------
 router.get('/session', (req, res) => {
   if (req.session && req.session.customerId) {

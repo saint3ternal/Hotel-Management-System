@@ -1,31 +1,38 @@
 // ============================================================
-// PostgreSQL connection pool
-// ============================================================
-// Centralized place that creates and exports the shared SQL client
-// used by every route/controller in the app.
+// PostgreSQL connection pool  (node-postgres / pg)
 // ============================================================
 
 require('dotenv').config();
+const { Pool } = require('pg');
 
-const postgres = require('postgres');
+const pool = new Pool(
+  process.env.DATABASE_URL
+    ? {
+        connectionString: process.env.DATABASE_URL,
+        ssl: { rejectUnauthorized: false }   // required by Neon / Supabase / Railway
+      }
+    : {
+        host:     process.env.DB_HOST     || 'localhost',
+        port:     Number(process.env.DB_PORT) || 5432,
+        user:     process.env.DB_USER     || 'postgres',
+        password: process.env.DB_PASSWORD || '',
+        database: process.env.DB_NAME     || 'hotel_management',
+        ssl: false
+      }
+);
 
-const connectionString = process.env.DATABASE_URL || `postgres://${process.env.DB_USER || 'postgres'}:${process.env.DB_PASSWORD || 'postgres'}@${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || 5432}/${process.env.DB_NAME || 'hotel_management'}`;
-
-const sql = postgres(connectionString, {
-  ssl: process.env.PGSSLMODE === 'require' ? { rejectUnauthorized: false } : false,
-  max: 10,
-  idle_timeout: 20,
-  connect_timeout: 10
-});
-
+// Quick startup check
 async function testConnection() {
   try {
-    const [row] = await sql`SELECT current_database() AS db_name, current_user AS user_name`;
-    console.log('Database connection successful.', row);
-  } catch (error) {
-    console.error('Database connection failed:', error.message);
-    throw error;
+    const { rows } = await pool.query(
+      'SELECT current_database() AS db, current_user AS usr'
+    );
+    console.log(`✅  PostgreSQL connected — db: ${rows[0].db}, user: ${rows[0].usr}`);
+    return true;
+  } catch (err) {
+    console.error('❌  PostgreSQL connection failed:', err.message);
+    return false;
   }
 }
 
-module.exports = { sql, testConnection };
+module.exports = { pool, testConnection };
