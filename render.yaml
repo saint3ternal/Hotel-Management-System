@@ -1,0 +1,25 @@
+# ============================================================
+# Render deployment configuration
+# https://render.com/docs/render-yaml
+# ============================================================
+
+services:
+  - type: web
+    name: hotel-management-system
+    runtime: node
+    plan: free                        # upgrade to starter for always-on
+    buildCommand: npm install
+    startCommand: node server/server.js
+    healthCheckPath: /api/auth/session
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false                   # set manually in Render dashboard
+      - key: SESSION_SECRET
+        generateValue: true           # Render auto-generates a secure secret
+      - key: KITCHEN_PIN
+        sync: false                   # set manually in Render dashboard
+      - key: ALLOWED_ORIGIN
+        sync: false                   # set to your Render URL after first deploy
