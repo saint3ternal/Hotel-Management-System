@@ -1,9 +1,3 @@
-// ============================================================
-// API helper — small wrapper around fetch() used by every
-// other frontend script. Keeps credentials (session cookie)
-// included on every request automatically.
-// ============================================================
-
 const API = {
   async request(method, path, body) {
     const options = {
@@ -15,9 +9,11 @@ const API = {
       options.body = JSON.stringify(body);
     }
 
-    const apiBase = window.__API_BASE_URL__ || (
-      window.location.port === '3000' ? '' : `${window.location.protocol}//${window.location.hostname}:3000`
-    );
+    // API is served from the same origin as the frontend (server.js serves
+    // both). Only override this if you deliberately point at a different
+    // API host by setting window.__API_BASE_URL__ before this script loads.
+    const apiBase = window.__API_BASE_URL__ || '';
+
     const res = await fetch(`${apiBase}/api${path}`, options);
     let data;
     try {
@@ -34,15 +30,3 @@ const API = {
   get(path) { return this.request('GET', path); },
   post(path, body) { return this.request('POST', path, body); }
 };
-
-function showToast(message, duration = 3000) {
-  const toast = document.getElementById('toast');
-  toast.textContent = message;
-  toast.hidden = false;
-  clearTimeout(showToast._t);
-  showToast._t = setTimeout(() => { toast.hidden = true; }, duration);
-}
-
-function formatMoney(amount) {
-  return `$${Number(amount).toFixed(2)}`;
-}
