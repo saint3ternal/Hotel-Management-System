@@ -3,7 +3,7 @@
 // ============================================================
 
 require('dotenv').config();
-const { Pool } = require('pg');
+const { Pool } = require('postgres');
 
 const pool = new Pool(
   process.env.DATABASE_URL
