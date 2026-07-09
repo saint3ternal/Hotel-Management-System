@@ -1,15 +1,9 @@
 // ============================================================
-// Order routes — PostgreSQL edition
-// ============================================================
-// Key differences from MySQL version:
-//  - $1..$n placeholders instead of ?
-//  - pool.connect() + client.query() for transactions
-//  - ANY($1) instead of IN (?) for array membership
-//  - RETURNING order_id instead of result.insertId
+// Order routes — PostgreSQL (postgres.js) edition
 // ============================================================
  
 const express = require('express');
-const { pool } = require('./db');
+const { sql } = require('./db');
 const { requireAuth } = require('./authMiddleware');
  
 const router = express.Router();
@@ -32,63 +26,62 @@ router.post('/', async (req, res) => {
     }
   }
  
-  const client = await pool.connect();
   try {
-    await client.query('BEGIN');
+    // Execute all queries inside an isolated atomic transaction block
+    const resultOrder = await sql.begin(async sql => {
+      const itemIds = items.map(l => l.itemId);
  
-    const itemIds = items.map(l => l.itemId);
+      // postgres.js handles arrays using sql`... IN (${itemIds})` out of the box safely
+      const menuRows = await sql`
+        SELECT item_id, price, is_available FROM menu_items WHERE item_id IN (${itemIds})
+      `;
  
-    // ANY($1) with a JS array works natively in pg
-    const { rows: menuRows } = await client.query(
-      'SELECT item_id, price, is_available FROM menu_items WHERE item_id = ANY($1)',
-      [itemIds]
-    );
+      const priceMap = new Map(menuRows.map(row => [row.item_id, row]));
+      let total = 0;
+      const lineItems = [];
  
-    const priceMap = new Map(menuRows.map(row => [row.item_id, row]));
- 
-    let total = 0;
-    const lineItems = [];
- 
-    for (const line of items) {
-      const menuItem = priceMap.get(line.itemId);
-      if (!menuItem || !menuItem.is_available) {
-        throw new Error(`Menu item ${line.itemId} is not available.`);
+      for (const line of items) {
+        const menuItem = priceMap.get(line.itemId);
+        if (!menuItem || !menuItem.is_available) {
+          throw new Error(`Menu item ${line.itemId} is not available.`);
+        }
+        const unitPrice = Number(menuItem.price);
+        const subtotal  = unitPrice * line.quantity;
+        total += subtotal;
+        lineItems.push({ itemId: line.itemId, quantity: line.quantity, unitPrice, subtotal });
       }
-      const unitPrice = Number(menuItem.price);
-      const subtotal  = unitPrice * line.quantity;
-      total += subtotal;
-      lineItems.push({ itemId: line.itemId, quantity: line.quantity, unitPrice, subtotal });
-    }
  
-    const orderRes = await client.query(
-      `INSERT INTO orders (customer_id, total_amount, notes)
-       VALUES ($1, $2, $3)
-       RETURNING order_id`,
-      [customerId, total, notes || null]
-    );
-    const orderId = orderRes.rows[0].order_id;
+      // Insert the master order entry
+      const [orderRes] = await sql`
+        INSERT INTO orders (customer_id, total_amount, notes)
+        VALUES (${customerId}, ${total}, ${notes || null})
+        RETURNING order_id
+      `;
+      const orderId = orderRes.order_id;
  
-    for (const li of lineItems) {
-      await client.query(
-        `INSERT INTO order_items (order_id, item_id, quantity, unit_price, subtotal)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [orderId, li.itemId, li.quantity, li.unitPrice, li.subtotal]
-      );
-    }
- 
-    await client.query('COMMIT');
+      // Write the child connection rows safely inside the transaction loop
+      for (const li of lineItems) {
+        await sql`
+          INSERT INTO order_items (order_id, item_id, quantity, unit_price, subtotal)
+          VALUES (${orderId}, ${li.itemId}, ${li.quantity}, ${li.unitPrice}, ${li.subtotal})
+        `;
+      }
+
+      return { orderId, total, lineItemsCount: lineItems.length };
+    });
  
     res.status(201).json({
       success: true,
       message: 'Order placed successfully.',
-      order: { orderId, total: Number(total.toFixed(2)), itemCount: lineItems.length }
+      order: { 
+        orderId: resultOrder.orderId, 
+        total: Number(resultOrder.total.toFixed(2)), 
+        itemCount: resultOrder.lineItemsCount 
+      }
     });
   } catch (err) {
-    await client.query('ROLLBACK');
     console.error('Place order error:', err);
     res.status(400).json({ success: false, message: err.message || 'Could not place order.' });
-  } finally {
-    client.release();
   }
 });
  
@@ -99,23 +92,28 @@ router.get('/', async (req, res) => {
   try {
     const customerId = req.session.customerId;
  
-    const { rows: orders } = await pool.query(
-      `SELECT order_id, total_amount, status, notes, created_at
-       FROM orders
-       WHERE customer_id = $1
-       ORDER BY created_at DESC`,
-      [customerId]
-    );
+    // Fetch customer base orders
+    const orders = await sql`
+      SELECT order_id, total_amount, status, notes, created_at
+      FROM orders
+      WHERE customer_id = ${customerId}
+      ORDER BY created_at DESC
+    `;
  
-    const { rows: orderItems } = await pool.query(
-      `SELECT oi.order_id, oi.quantity, oi.unit_price, oi.subtotal, mi.name
-       FROM order_items oi
-       JOIN menu_items mi ON mi.item_id = oi.item_id
-       WHERE oi.order_id IN (
-         SELECT order_id FROM orders WHERE customer_id = $1
-       )`,
-      [customerId]
-    );
+    // Return early with an empty list if they have no active orders
+    if (orders.length === 0) {
+      return res.json({ success: true, orders: [] });
+    }
+
+    const targetOrderIds = orders.map(o => o.order_id);
+
+    // Fetch matching nested order detail sub-lines
+    const orderItems = await sql`
+      SELECT oi.order_id, oi.quantity, oi.unit_price, oi.subtotal, mi.name
+      FROM order_items oi
+      JOIN menu_items mi ON mi.item_id = oi.item_id
+      WHERE oi.order_id IN (${targetOrderIds})
+    `;
  
     const result = orders.map(order => ({
       orderId:   order.order_id,
@@ -141,6 +139,3 @@ router.get('/', async (req, res) => {
 });
  
 module.exports = router;
- 
-
-
