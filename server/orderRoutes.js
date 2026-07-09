@@ -27,12 +27,13 @@ router.post('/', async (req, res) => {
   }
  
   try {
-    const resultOrder = await sql.begin(async sql => {
+    // FIXED: Changed callback argument from 'sql' to 'tx' to prevent variable shadowing and crash loops
+    const resultOrder = await sql.begin(async tx => {
       const itemIds = items.map(l => l.itemId);
  
-      // Array mapping corrected using ${sql(itemIds)} without parenthesized wraps
-      const menuRows = await sql`
-        SELECT item_id, price, is_available FROM menu_items WHERE item_id IN ${sql(itemIds)}
+      // Executed on the isolated transaction 'tx' namespace
+      const menuRows = await tx`
+        SELECT item_id, price, is_available FROM menu_items WHERE item_id IN ${tx(itemIds)}
       `;
  
       const priceMap = new Map(menuRows.map(row => [row.item_id, row]));
@@ -50,7 +51,7 @@ router.post('/', async (req, res) => {
         lineItems.push({ itemId: line.itemId, quantity: line.quantity, unitPrice, subtotal });
       }
  
-      const [orderRes] = await sql`
+      const [orderRes] = await tx`
         INSERT INTO orders (customer_id, total_amount, notes)
         VALUES (${customerId}, ${total}, ${notes || null})
         RETURNING order_id
@@ -58,7 +59,7 @@ router.post('/', async (req, res) => {
       const orderId = orderRes.order_id;
  
       for (const li of lineItems) {
-        await sql`
+        await tx`
           INSERT INTO order_items (order_id, item_id, quantity, unit_price, subtotal)
           VALUES (${orderId}, ${li.itemId}, ${li.quantity}, ${li.unitPrice}, ${li.subtotal})
         `;
@@ -102,7 +103,6 @@ router.get('/', async (req, res) => {
 
     const targetOrderIds = orders.map(o => o.order_id);
 
-    // Array mapping corrected using ${sql(targetOrderIds)}
     const orderItems = await sql`
       SELECT oi.order_id, oi.quantity, oi.unit_price, oi.subtotal, mi.name
       FROM order_items oi
