@@ -3,6 +3,14 @@
 // meal detail modal, and the order ticket (cart)
 // ============================================================
 
+// Currency formatter utility
+function formatMoney(amount) {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD' 
+  }).format(amount);
+}
+
 const MenuState = {
   categories: [],
   activeCategoryId: 'all',
