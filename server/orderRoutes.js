@@ -27,13 +27,12 @@ router.post('/', async (req, res) => {
   }
  
   try {
-    // Execute all queries inside an isolated atomic transaction block
     const resultOrder = await sql.begin(async sql => {
       const itemIds = items.map(l => l.itemId);
  
-      // postgres.js handles arrays using sql`... IN (${itemIds})` out of the box safely
+      // Array mapping corrected using ${sql(itemIds)} without parenthesized wraps
       const menuRows = await sql`
-        SELECT item_id, price, is_available FROM menu_items WHERE item_id IN (${itemIds})
+        SELECT item_id, price, is_available FROM menu_items WHERE item_id IN ${sql(itemIds)}
       `;
  
       const priceMap = new Map(menuRows.map(row => [row.item_id, row]));
@@ -51,7 +50,6 @@ router.post('/', async (req, res) => {
         lineItems.push({ itemId: line.itemId, quantity: line.quantity, unitPrice, subtotal });
       }
  
-      // Insert the master order entry
       const [orderRes] = await sql`
         INSERT INTO orders (customer_id, total_amount, notes)
         VALUES (${customerId}, ${total}, ${notes || null})
@@ -59,7 +57,6 @@ router.post('/', async (req, res) => {
       `;
       const orderId = orderRes.order_id;
  
-      // Write the child connection rows safely inside the transaction loop
       for (const li of lineItems) {
         await sql`
           INSERT INTO order_items (order_id, item_id, quantity, unit_price, subtotal)
@@ -92,7 +89,6 @@ router.get('/', async (req, res) => {
   try {
     const customerId = req.session.customerId;
  
-    // Fetch customer base orders
     const orders = await sql`
       SELECT order_id, total_amount, status, notes, created_at
       FROM orders
@@ -100,19 +96,18 @@ router.get('/', async (req, res) => {
       ORDER BY created_at DESC
     `;
  
-    // Return early with an empty list if they have no active orders
     if (orders.length === 0) {
       return res.json({ success: true, orders: [] });
     }
 
     const targetOrderIds = orders.map(o => o.order_id);
 
-    // Fetch matching nested order detail sub-lines
+    // Array mapping corrected using ${sql(targetOrderIds)}
     const orderItems = await sql`
       SELECT oi.order_id, oi.quantity, oi.unit_price, oi.subtotal, mi.name
       FROM order_items oi
       JOIN menu_items mi ON mi.item_id = oi.item_id
-      WHERE oi.order_id IN (${targetOrderIds})
+      WHERE oi.order_id IN ${sql(targetOrderIds)}
     `;
  
     const result = orders.map(order => ({
