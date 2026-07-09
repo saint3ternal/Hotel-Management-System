@@ -242,3 +242,18 @@ async function placeOrder() {
 function initTicket() {
   document.getElementById('placeOrderBtn').addEventListener('click', placeOrder);
 }
+// Simple Fallback Toast Alert Utility
+function showToast(message, duration = 3000) {
+  let container = document.getElementById('toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toast-container';
+    container.style.cssText = 'position:fixed; bottom:20px; right:20px; z-index:9999;';
+    document.body.appendChild(container);
+  }
+  const toast = document.createElement('div');
+  toast.textContent = message;
+  toast.style.cssText = 'background:#333; color:#fff; padding:12px 24px; margin-top:8px; border-radius:4px; font-family:sans-serif; box-shadow:0 4px 6px rgba(0,0,0,0.1); fade-in 0.3s;';
+  container.appendChild(toast);
+  setTimeout(() => toast.remove(), duration);
+}
