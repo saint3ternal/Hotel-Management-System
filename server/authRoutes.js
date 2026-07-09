@@ -29,14 +29,10 @@ router.post('/register', async (req, res) => {
     const cleanName  = sanitizeString(fullName);
     const cleanPhone = sanitizeString(phone);
 
-   
-
-      // 1. Existing user check (Around line 32)
     const existing = await sql`
       SELECT customer_id FROM customers WHERE email = ${cleanEmail}
     `;
 
-    // Note: postgres returns rows directly as an array, so check existing.length
     if (existing.length > 0) {
       return res.status(409).json({
         success: false,
@@ -46,8 +42,7 @@ router.post('/register', async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
-    // 2. Insert new customer
-    const result = await sql`
+    const [result] = await sql`
       INSERT INTO customers (full_name, email, phone, password_hash)
       VALUES (${cleanName}, ${cleanEmail}, ${cleanPhone}, ${passwordHash})
       RETURNING customer_id
@@ -56,9 +51,8 @@ router.post('/register', async (req, res) => {
     res.status(201).json({
       success: true,
       message: 'Registration successful. You can now log in.',
-      customerId: result[0].customer_id // Note: result[0] instead of result.rows[0]
+      customerId: result.customer_id
     });
-
   } catch (err) {
     console.error('Register error:', err);
     res.status(500).json({ success: false, message: 'Server error during registration.' });
@@ -68,20 +62,28 @@ router.post('/register', async (req, res) => {
 // ------------------------------------------------------------
 // POST /api/auth/login
 // ------------------------------------------------------------
+router.post('/login', async (req, res) => {
+  const { email, password } = req.body;
+  const ip = req.ip || req.connection.remoteAddress;
+
+  const errors = validateLogin({ email, password });
+  if (errors.length > 0) {
+    return res.status(400).json({ success: false, message: errors[0], errors });
+  }
+
+  const cleanEmail = email.trim().toLowerCase();
+
   try {
-    // 1. Get customer
     const rows = await sql`
       SELECT * FROM customers WHERE email = ${cleanEmail}
     `;
 
-    // 2. Fix the helper function to use sql template literal
     const logAttempt = (success, customerId = null) =>
       sql`
         INSERT INTO login_attempts (email, customer_id, success, ip_address)
         VALUES (${cleanEmail}, ${customerId}, ${success}, ${ip})
       `;
 
-    // Note: rows is an array directly, check rows.length
     if (rows.length === 0) {
       await logAttempt(false);
       return res.status(401).json({ success: false, message: 'Invalid email or password.' });
@@ -109,7 +111,6 @@ router.post('/register', async (req, res) => {
         lockedUntil = new Date(Date.now() + LOCK_DURATION_MINUTES * 60000);
       }
 
-      // 3. Update customer table on failed attempt
       await sql`
         UPDATE customers 
         SET failed_attempts = ${lockedUntil ? 0 : newFailedCount}, locked_until = ${lockedUntil} 
@@ -133,7 +134,6 @@ router.post('/register', async (req, res) => {
     }
 
     // Success
-    // 4. Reset lock details on success
     await sql`
       UPDATE customers SET failed_attempts = 0, locked_until = NULL WHERE customer_id = ${customer.customer_id}
     `;
@@ -155,7 +155,7 @@ router.post('/register', async (req, res) => {
     console.error('Login error:', err);
     res.status(500).json({ success: false, message: 'Server error during login.' });
   }
-;
+});
 
 // ------------------------------------------------------------
 // POST /api/auth/logout
